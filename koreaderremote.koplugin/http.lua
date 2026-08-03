@@ -10,6 +10,9 @@ function M.attach(Remote, context)
     local VERSION = context.version
     local BUILD = context.build
     local INDEX_FILE = context.index_file
+    local WEB_DIR = context.web_dir
+        or (INDEX_FILE and INDEX_FILE:match("^(.*)/[^/]+$"))
+        or "."
     local HTTP_STATUS = context.http_status
     local RECOVERY_RETRY_SECONDS = context.recovery_retry_seconds
     local function jsonEscape(value)
@@ -154,6 +157,14 @@ function Remote:sendResponse(request_id, status, content_type, body, counts_as_i
         ),
         "Connection: close",
         "Cache-Control: no-store",
+        -- 允许独立静态前端（Hub）跨域直连本机 API
+        "Access-Control-Allow-Origin: *",
+        "Access-Control-Allow-Methods: GET, POST, OPTIONS",
+        "Access-Control-Allow-Headers: Content-Type, Accept, X-KOReader-Input-Base64, X-KOReader-Input-Mode, Access-Control-Request-Private-Network, Access-Control-Request-Headers",
+        "Access-Control-Max-Age: 86400",
+        "Access-Control-Allow-Private-Network: true",
+        "Private-Network-Access-Name: koreader-remote",
+        "Private-Network-Access-ID: 00:00:00:43:91:70",
     }
 
     if content_type then
@@ -203,6 +214,58 @@ function Remote:readIndex()
     return body
 end
 
+local STATIC_MIME = {
+    css = "text/css; charset=utf-8",
+    js = "application/javascript; charset=utf-8",
+    html = "text/html; charset=utf-8",
+    htm = "text/html; charset=utf-8",
+    png = "image/png",
+    jpg = "image/jpeg",
+    jpeg = "image/jpeg",
+    svg = "image/svg+xml",
+    ico = "image/x-icon",
+    json = "application/json; charset=utf-8",
+    map = "application/json; charset=utf-8",
+    txt = "text/plain; charset=utf-8",
+    woff = "font/woff",
+    woff2 = "font/woff2",
+}
+
+function Remote:readWebStatic(relative_name)
+    if type(relative_name) ~= "string" or relative_name == "" then
+        return nil, "empty"
+    end
+    -- Only simple filenames under web/, no path traversal.
+    if relative_name:find("[/\\]") or relative_name:find("%.%.") then
+        return nil, "invalid path"
+    end
+    if not relative_name:match("^[%w%._%-]+$") then
+        return nil, "invalid name"
+    end
+
+    local path = WEB_DIR .. "/" .. relative_name
+    -- Web zh_CN catalog lives with other plugin locales.
+    if relative_name == "i18n-zh_CN.json" then
+        local plugin_dir = WEB_DIR:match("^(.*)/[^/]+$") or "."
+        path = plugin_dir .. "/locale/web_zh_CN.json"
+    end
+
+    local file, err = io.open(path, "rb")
+    if not file then
+        return nil, err
+    end
+    local body = file:read("*all")
+    file:close()
+    if type(body) ~= "string" then
+        return nil, "read failed"
+    end
+
+    local ext = relative_name:match("%.([%w]+)$")
+    ext = ext and ext:lower() or ""
+    local mime = STATIC_MIME[ext] or "application/octet-stream"
+    return body, nil, mime
+end
+
 function Remote:hasOpenDocument()
     local owner = runtime.owner
     runtime.document_open = owner ~= nil
@@ -218,6 +281,70 @@ function Remote:turnPage(delta)
 
     UIManager:nextTick(function()
         UIManager:sendEvent(Event:new("GotoViewRel", delta))
+    end)
+    return true
+end
+
+-- Wait until KOReader has applied the page turn before answering HTTP.
+-- Without this, clients can fetch /page-text while the view is still stale.
+function Remote:turnPageWhenReady(delta, callback)
+    if type(callback) ~= "function" then
+        return self:turnPage(delta)
+    end
+
+    if not self:hasOpenDocument() then
+        callback(false, "NO_DOCUMENT_OPEN")
+        return false
+    end
+
+    local before_key = nil
+    local before_hash = nil
+    local function readSnapshot()
+        local ok_call, snap_ok, snap =
+            pcall(runtime.interaction.getReadingSnapshot, runtime.interaction)
+        if ok_call and snap_ok and type(snap) == "table" then
+            return snap
+        end
+        return nil
+    end
+
+    local before = readSnapshot()
+    if before then
+        before_key = before.page_key
+        before_hash = before.content_hash
+    end
+
+    UIManager:nextTick(function()
+        UIManager:sendEvent(Event:new("GotoViewRel", delta))
+
+        local attempts = 0
+        local max_attempts = 12
+
+        local function waitForAppliedTurn()
+            attempts = attempts + 1
+
+            local after = readSnapshot()
+            local after_key = after and after.page_key or nil
+            local after_hash = after and after.content_hash or nil
+
+            local changed = false
+            if before_key and after_key and after_key ~= before_key then
+                changed = true
+            elseif before_hash and after_hash and after_hash ~= before_hash then
+                changed = true
+            elseif not before_key and not before_hash and attempts >= 3 then
+                changed = true
+            end
+
+            if changed or attempts >= max_attempts then
+                callback(true)
+                return
+            end
+
+            UIManager:nextTick(waitForAppliedTurn)
+        end
+
+        UIManager:nextTick(waitForAppliedTurn)
     end)
     return true
 end
@@ -247,13 +374,25 @@ function Remote:onRequestUnsafe(data, request_id)
     local headers = parseHeaders(data)
     logger.dbg("KOReaderRemote:", method, uri)
 
+    -- 浏览器跨域预检（静态 Hub / 局域网页面直连）
+    if method == "OPTIONS" then
+        return self:sendResponse(request_id, 204, nil, "")
+    end
+
     if uri ~= "/"
         and uri ~= "/index.html"
+        and uri ~= "/styles.css"
+        and uri ~= "/app.js"
         and uri ~= "/api/ping"
         and uri ~= "/api/v1/capabilities"
         and uri ~= "/api/v1/device-state"
         and uri ~= "/api/v1/note-session"
         and uri ~= "/api/v1/bookmarks"
+        and uri ~= "/api/v1/footnotes"
+        and uri ~= "/api/v1/toc"
+        and uri ~= "/api/v1/input"
+        and uri ~= "/api/v1/book-cover"
+        and uri ~= "/api/v1/page-jump"
         and uri ~= "/favicon.ico" then
         self:markActivity()
     end
@@ -297,6 +436,29 @@ function Remote:onRequestUnsafe(data, request_id)
         )
     end
 
+    -- 静态前端资源：/styles.css /app.js 等（与 index 同目录）
+    do
+        local static_name = uri:match("^/([%w%._%-]+)$")
+        if static_name
+            and static_name ~= "api"
+            and method == "GET"
+        then
+            local body, err, mime = self:readWebStatic(static_name)
+            if body then
+                return self:sendResponse(
+                    request_id,
+                    200,
+                    mime,
+                    body,
+                    false
+                )
+            end
+            if err ~= "invalid path" and err ~= "invalid name" and err ~= "empty" then
+                logger.dbg("KOReaderRemote: static miss", static_name, err)
+            end
+        end
+    end
+
     if uri == "/api/ping" then
         if method ~= "GET" then
             return self:sendControlError(
@@ -307,6 +469,49 @@ function Remote:onRequestUnsafe(data, request_id)
             )
         end
 
+        local Device = require("device")
+        local device_name = Device.model
+        if type(device_name) ~= "string" or device_name == "" then
+            local ok, info = pcall(function()
+                return Device:info()
+            end)
+            if ok and type(info) == "string" and info ~= "" then
+                device_name = info
+            else
+                device_name = "KOReader"
+            end
+        end
+
+        local book_title = nil
+        local page_key = nil
+        local page = nil
+        if self:hasOpenDocument()
+            and runtime.interaction then
+            if type(runtime.interaction.getBookTitle) == "function" then
+                local owner = runtime.owner
+                local title = runtime.interaction:getBookTitle(owner and owner.ui)
+                if type(title) == "string" and title ~= "" then
+                    book_title = title
+                end
+            end
+            if type(runtime.interaction.getReadingPosition) == "function" then
+                local ok_call, snap_ok, snap = pcall(
+                    runtime.interaction.getReadingPosition,
+                    runtime.interaction
+                )
+                if ok_call and snap_ok and type(snap) == "table" then
+                    if type(snap.page_key) == "string" and snap.page_key ~= "" then
+                        page_key = snap.page_key
+                    end
+                    if type(snap.page) == "string" and snap.page ~= "" then
+                        page = snap.page
+                    elseif page_key then
+                        page = page_key
+                    end
+                end
+            end
+        end
+
         return self:sendJSON(request_id, 200, {
             ok = true,
             version = VERSION,
@@ -315,6 +520,10 @@ function Remote:onRequestUnsafe(data, request_id)
             release_version = BUILD.release_version,
             build_id = BUILD.build_id,
             commit = BUILD.commit,
+            device_name = device_name,
+            book_title = book_title,
+            page_key = page_key,
+            page = page,
             state = runtime.state,
             port = runtime.running_port or self:getPort(),
             autostart = runtime.autostart == true,
@@ -346,7 +555,24 @@ function Remote:onRequestUnsafe(data, request_id)
         local delta = uri == "/api/next" and 1 or -1
         local action = delta == 1 and "next" or "previous"
 
-        if not self:turnPage(delta) then
+        if not self:turnPageWhenReady(delta, function(success, code)
+            if not success then
+                self:sendControlError(
+                    request_id,
+                    409,
+                    code or "NO_DOCUMENT_OPEN",
+                    "Open a book on the reader first."
+                )
+                return
+            end
+
+            self:sendJSON(
+                request_id,
+                200,
+                { ok = true, action = action },
+                true
+            )
+        end) then
             return self:sendControlError(
                 request_id,
                 409,
@@ -354,16 +580,106 @@ function Remote:onRequestUnsafe(data, request_id)
                 "Open a book on the reader first."
             )
         end
-
-        return self:sendJSON(
-            request_id,
-            200,
-            { ok = true, action = action },
-            true
-        )
+        return
     end
 
     local controls = runtime.device_controls
+
+    if uri == "/api/v1/page-jump" then
+        if method ~= "GET" and method ~= "POST" then
+            return self:sendControlError(
+                request_id,
+                405,
+                "METHOD_NOT_ALLOWED",
+                "Use GET or POST for this endpoint."
+            )
+        end
+
+        if not runtime.interaction then
+            return self:sendControlError(
+                request_id,
+                501,
+                "NOT_SUPPORTED",
+                "Page jump is not available."
+            )
+        end
+
+        local target = tonumber(params.page or params.target)
+        if target == nil then
+            local ok, result, message = runtime.interaction:getPageJumpInfo()
+            if not ok then
+                return self:sendControlError(
+                    request_id,
+                    409,
+                    result,
+                    message or "Open a book on the reader first."
+                )
+            end
+            return self:sendJSON(request_id, 200, {
+                ok = true,
+                jump = result,
+            })
+        end
+
+        local ok, result, message = runtime.interaction:gotoPageNumber(target)
+        if not ok then
+            local status = 409
+            if result == "INVALID_PAGE" or result == "PAGE_OUT_OF_RANGE" then
+                status = 400
+            elseif result == "GOTO_FAILED" then
+                status = 409
+            end
+            return self:sendControlError(
+                request_id,
+                status,
+                result,
+                message or "Could not jump to that page."
+            )
+        end
+
+        return self:sendJSON(request_id, 200, {
+            ok = true,
+            action = result.action,
+            page = result.page,
+            page_key = result.page_key,
+            target = result.target,
+        }, true)
+    end
+
+    if uri == "/api/v1/book-cover" then
+        if method ~= "GET" then
+            return self:sendControlError(
+                request_id,
+                405,
+                "METHOD_NOT_ALLOWED",
+                "Use GET for this endpoint."
+            )
+        end
+
+        if not runtime.interaction
+            or type(runtime.interaction.getBookCoverImageBytes) ~= "function" then
+            return self:sendControlError(
+                request_id,
+                501,
+                "NOT_SUPPORTED",
+                "Book cover export is not available."
+            )
+        end
+
+        local ok, result = runtime.interaction:getBookCoverImageBytes()
+        if not ok then
+            local code = tostring(result or "NO_COVER")
+            local status = code == "NO_DOCUMENT_OPEN" and 409 or 404
+            return self:sendControlError(
+                request_id,
+                status,
+                code,
+                "No book cover is available for the current document."
+            )
+        end
+
+        return self:sendResponse(request_id, 200, "image/png", result)
+    end
 
     if uri == "/api/v1/capabilities" then
         if method ~= "GET" then
@@ -615,6 +931,195 @@ function Remote:onRequestUnsafe(data, request_id)
         })
     end
 
+    if uri == "/api/v1/toc" then
+        if method ~= "GET" then
+            return self:sendControlError(
+                request_id,
+                405,
+                "METHOD_NOT_ALLOWED",
+                "Use GET for this endpoint."
+            )
+        end
+
+        local ok, result, message = runtime.interaction:getToc()
+
+        if not ok then
+            local status = 409
+            if result == "TOC_NOT_SUPPORTED" then
+                status = 501
+            elseif result == "NO_DOCUMENT_OPEN" then
+                status = 409
+            end
+
+            return self:sendControlError(
+                request_id,
+                status,
+                result,
+                message
+            )
+        end
+
+        return self:sendJSON(request_id, 200, {
+            ok = true,
+            toc = result,
+        })
+    end
+
+    if uri == "/api/v1/toc/open" then
+        if method ~= "POST" then
+            return self:sendControlError(
+                request_id,
+                405,
+                "METHOD_NOT_ALLOWED",
+                "Use POST for this endpoint."
+            )
+        end
+
+        local ok, result, message =
+            runtime.interaction:openTocEntry(params.id)
+
+        if not ok then
+            local status = 409
+            if result == "MISSING_TOC_ENTRY" then
+                status = 400
+            elseif result == "TOC_NOT_SUPPORTED" then
+                status = 501
+            end
+
+            return self:sendControlError(
+                request_id,
+                status,
+                result,
+                message
+            )
+        end
+
+        return self:sendJSON(
+            request_id,
+            200,
+            {
+                ok = true,
+                action = result.action,
+                id = result.id,
+                title = result.title,
+                page = result.page,
+                return_position = result.return_position,
+            },
+            true
+        )
+    end
+
+    if uri == "/api/v1/toc/return" then
+        if method ~= "POST" then
+            return self:sendControlError(
+                request_id,
+                405,
+                "METHOD_NOT_ALLOWED",
+                "Use POST for this endpoint."
+            )
+        end
+
+        local ok, result, message =
+            runtime.interaction:returnToReadingPosition()
+
+        if not ok then
+            local status = result == "NO_RETURN_POSITION" and 404 or 409
+            return self:sendControlError(
+                request_id,
+                status,
+                result,
+                message
+            )
+        end
+
+        return self:sendJSON(
+            request_id,
+            200,
+            {
+                ok = true,
+                action = result.action,
+                page = result.page,
+                return_position = result.return_position,
+            },
+            true
+        )
+    end
+
+    if uri == "/api/v1/input" then
+        if method ~= "GET" then
+            return self:sendControlError(
+                request_id,
+                405,
+                "METHOD_NOT_ALLOWED",
+                "Use GET for this endpoint."
+            )
+        end
+
+        local ok, result = runtime.interaction:getInputStatus()
+        if not ok then
+            return self:sendControlError(
+                request_id,
+                500,
+                "INPUT_STATUS_FAILED",
+                "Could not inspect the reader input box."
+            )
+        end
+
+        return self:sendJSON(request_id, 200, {
+            ok = true,
+            input = result,
+        })
+    end
+
+    if uri == "/api/v1/input/push" then
+        if method ~= "POST" then
+            return self:sendControlError(
+                request_id,
+                405,
+                "METHOD_NOT_ALLOWED",
+                "Use POST for this endpoint."
+            )
+        end
+
+        local mode = params.mode or headers["x-koreader-input-mode"]
+        local ok, result, message = runtime.interaction:pushInputText(
+            headers["x-koreader-input-base64"],
+            mode
+        )
+
+        if not ok then
+            local status = 400
+            if result == "NO_INPUT"
+                or result == "PASSWORD_FIELD"
+                or result == "NOT_EDITABLE"
+                or result == "INPUT_CLOSED" then
+                status = 409
+            elseif result == "NOTE_TOO_LARGE" then
+                status = 413
+            elseif result == "MISSING_NOTE" then
+                status = 400
+            end
+
+            return self:sendJSON(request_id, status, {
+                ok = false,
+                error = result,
+                message = message,
+            })
+        end
+
+        return self:sendJSON(
+            request_id,
+            200,
+            {
+                ok = true,
+                action = result.action,
+                mode = result.mode,
+                input = result.input,
+            },
+            true
+        )
+    end
+
     if uri == "/api/v1/bookmarks/open" then
         if method ~= "POST" then
             return self:sendControlError(
@@ -795,6 +1300,187 @@ function Remote:onRequestUnsafe(data, request_id)
         )
     end
 
+    if uri == "/api/v1/footnotes" then
+        if method ~= "GET" then
+            return self:sendControlError(
+                request_id,
+                405,
+                "METHOD_NOT_ALLOWED",
+                "Use GET for this endpoint."
+            )
+        end
+
+        local ok, result, message =
+            runtime.interaction:listFootnotes()
+
+        if not ok then
+            local status = result == "NOT_SUPPORTED" and 501 or 404
+            return self:sendControlError(
+                request_id,
+                status,
+                result,
+                message
+            )
+        end
+
+        return self:sendJSON(request_id, 200, {
+            ok = true,
+            page_key = result.page_key,
+            count = result.count,
+            footnotes = result.footnotes,
+            popup_open = result.popup_open,
+        }, true)
+    end
+
+    if uri == "/api/v1/page-turn" then
+        if method ~= "GET" then
+            return self:sendControlError(
+                request_id,
+                405,
+                "METHOD_NOT_ALLOWED",
+                "Use GET for this endpoint."
+            )
+        end
+
+        local delta = tonumber(params.delta) or 1
+        if delta ~= 1 and delta ~= -1 then
+            return self:sendControlError(
+                request_id,
+                400,
+                "INVALID_DELTA",
+                "delta must be 1 or -1."
+            )
+        end
+
+        local include_text = params.include_text == "1"
+            or params.include_text == "true"
+        local action = delta == 1 and "next" or "previous"
+
+        if not self:turnPageWhenReady(delta, function(success, code)
+            if not success then
+                self:sendControlError(
+                    request_id,
+                    409,
+                    code or "NO_DOCUMENT_OPEN",
+                    "Open a book on the reader first."
+                )
+                return
+            end
+
+            local payload = {
+                ok = true,
+                action = action,
+            }
+
+            if include_text then
+                local ok, result, message =
+                    runtime.interaction:getCurrentPageText()
+                if ok then
+                    payload.page = result
+                else
+                    payload.page_error = message
+                    payload.page_error_code = result
+                end
+            else
+                local ok, snapshot = runtime.interaction:getReadingSnapshot()
+                if ok then
+                    payload.page_key = snapshot.page_key
+                    payload.page = snapshot.page
+                    payload.content_hash = snapshot.content_hash
+                end
+            end
+
+            self:sendJSON(request_id, 200, payload, true)
+        end) then
+            return self:sendControlError(
+                request_id,
+                409,
+                "NO_DOCUMENT_OPEN",
+                "Open a book on the reader first."
+            )
+        end
+        return
+    end
+
+    if uri == "/api/v1/page-text" then
+        if method ~= "GET" then
+            return self:sendControlError(
+                request_id,
+                405,
+                "METHOD_NOT_ALLOWED",
+                "Use GET for this endpoint."
+            )
+        end
+
+        local ok, result, message =
+            runtime.interaction:getCurrentPageText()
+
+        if not ok then
+            local status = 404
+            if result == "NOT_SUPPORTED" then
+                status = 501
+            elseif result == "NO_DOCUMENT_OPEN" then
+                status = 409
+            end
+            return self:sendControlError(
+                request_id,
+                status,
+                result,
+                message
+            )
+        end
+
+        return self:sendJSON(request_id, 200, {
+            ok = true,
+            page = result,
+        }, true)
+    end
+
+    if uri == "/api/v1/page-text/peek" then
+        if method ~= "GET" then
+            return self:sendControlError(
+                request_id,
+                405,
+                "METHOD_NOT_ALLOWED",
+                "Use GET for this endpoint."
+            )
+        end
+
+        local max_skip = tonumber(params.max_skip) or 12
+        local ok, result, message =
+            runtime.interaction:peekNextSpeakablePageText(max_skip)
+
+        if not ok then
+            local status = 404
+            if result == "NOT_SUPPORTED" then
+                status = 501
+            elseif result == "NO_DOCUMENT_OPEN" then
+                status = 409
+            end
+            return self:sendControlError(
+                request_id,
+                status,
+                result,
+                message
+            )
+        end
+
+        if result.end_of_book then
+            return self:sendJSON(request_id, 200, {
+                ok = true,
+                end_of_book = true,
+                turn_count = result.turn_count or 0,
+            }, true)
+        end
+
+        return self:sendJSON(request_id, 200, {
+            ok = true,
+            end_of_book = false,
+            turn_count = result.turn_count or 1,
+            page = result,
+        }, true)
+    end
+
     if uri == "/api/v1/footnote/open" then
         if method ~= "POST" then
             return self:sendControlError(
@@ -806,10 +1492,16 @@ function Remote:onRequestUnsafe(data, request_id)
         end
 
         local ok, result, message =
-            runtime.interaction:openNextFootnote()
+            runtime.interaction:openFootnoteById(params.id)
 
         if not ok then
-            local status = result == "NOT_SUPPORTED" and 501 or 404
+            local status = 404
+            if result == "NOT_SUPPORTED" then
+                status = 501
+            elseif result == "INVALID_FOOTNOTE" then
+                status = 400
+            end
+
             return self:sendControlError(
                 request_id,
                 status,
@@ -824,6 +1516,44 @@ function Remote:onRequestUnsafe(data, request_id)
             {
                 ok = true,
                 action = result.action,
+                id = result.id,
+                marker = result.marker,
+                popup_open = result.popup_open,
+            },
+            true
+        )
+    end
+
+    if uri == "/api/v1/footnote/close" then
+        if method ~= "POST" then
+            return self:sendControlError(
+                request_id,
+                405,
+                "METHOD_NOT_ALLOWED",
+                "Use POST for this endpoint."
+            )
+        end
+
+        local ok, result, message =
+            runtime.interaction:closeFootnotePopup()
+
+        if not ok then
+            return self:sendControlError(
+                request_id,
+                404,
+                result,
+                message
+            )
+        end
+
+        return self:sendJSON(
+            request_id,
+            200,
+            {
+                ok = true,
+                action = result.action,
+                closed = result.closed,
+                popup_open = result.popup_open,
             },
             true
         )

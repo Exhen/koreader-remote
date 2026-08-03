@@ -56,14 +56,16 @@ Guest Wi-Fi networks often block local device-to-device traffic.
 4. Select **Tools -> KOReader Remote -> Start remote server**.
 5. Select **Show QR code** and scan it with your phone.
 
-The QR code opens a local address such as `http://192.168.1.42:8081/`.
+The QR code opens a local address such as `http://192.168.1.42:43917/`.
 
 ## ✨ Features
 
 - Turn pages with large touch controls.
 - Use keyboard arrow keys when available.
 - Browse, search, sort, and open bookmarks, highlights, and notes.
-- Open detected EPUB footnotes.
+- Browse the book table of contents and jump to chapters from the phone.
+- Browse current-page footnotes, open them on the reader, and close the popup.
+- Chinese UI for the KOReader menus and the phone remote page when the language is Chinese.
 - Edit and sync the active KOReader note draft.
 - Control supported frontlight, brightness, warmth, and night mode settings.
 - Trigger a full-screen refresh on supported E-Ink devices.
@@ -111,9 +113,12 @@ version, steps to reproduce, and a screenshot in a GitHub issue.
 currently open book. The `✎` button opens the phone note editor. To edit an
 existing note, use its annotation menu and choose **Edit note on phone**.
 
-**Footnotes.** The `¹` button asks KOReader to open the next link on the page
-that KOReader recognises as a footnote. Detection depends on the EPUB, so it
-will not work for every book.
+**Contents.** The `☰` button opens the book table of contents. Tap an entry to
+jump there on the reader, then use **Return to reading position** to go back.
+
+**Footnotes.** The `¹` button opens the current-page footnote list. Tap an
+item to show it in KOReader, then use **Close footnote popup** to dismiss it.
+Detection depends on the EPUB, so it will not work for every book.
 
 **Display.** Device settings start collapsed at the top of the phone page.
 The `◐` button enables OLED mode. It reduces persistent bright pixels, but
@@ -185,7 +190,18 @@ POST /api/v1/bookmarks/return
 POST /api/v1/bookmarks/edit-note?id=...
 POST /api/v1/bookmarks/delete-note?id=...
 POST /api/v1/bookmarks/delete?id=...
+GET  /api/v1/toc
+POST /api/v1/toc/open?id=...
+POST /api/v1/toc/return
+GET  /api/v1/input
+POST /api/v1/input/push?mode=replace
+POST /api/v1/input/push?mode=append
+GET  /api/v1/footnotes
 POST /api/v1/footnote/open
+POST /api/v1/footnote/open?id=...
+POST /api/v1/footnote/close
+GET  /api/v1/page-text
+GET  /api/v1/page-turn?delta=1&include_text=true
 POST /api/v1/note-session/push
 POST /api/v1/note-session/save
 POST /api/v1/note-session/cancel
@@ -199,8 +215,10 @@ POST /api/v1/full-refresh
 ```
 
 Brightness and warmth use percentages and are translated to the device's
-native range. Note text is sent as bounded Base64-encoded UTF-8 request
-headers because KOReader's bundled HTTP server does not read request bodies.
+native range. Note and input text is sent as bounded Base64-encoded UTF-8
+request headers because KOReader's bundled HTTP server does not read request
+bodies. Input push targets the currently focused KOReader input box (for
+example search or note dialogs) via `X-KOReader-Input-Base64`.
 The status responses also include `channel`, `source`, `release_version`,
 `build_id`, and `commit` so Dev testers can identify the exact build.
 

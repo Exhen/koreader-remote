@@ -7,14 +7,15 @@ local WidgetContainer = require("ui/widget/container/widgetcontainer")
 local logger = require("logger")
 
 local VERSION = "0.9.5"
-local DEFAULT_PORT = 8081
+local DEFAULT_PORT = 43917
 local LEGACY_SETTINGS_KEY = "koreaderremote"
 local PORT_SETTINGS_KEY = "koreaderremote_port"
 local AUTOSTART_SETTINGS_KEY = "koreaderremote_autostart"
 local IDLE_TIMEOUT_SETTINGS_KEY = "koreaderremote_idle_timeout_minutes"
 local UPDATE_CHANNEL_SETTINGS_KEY = "koreaderremote_update_channel"
 local PLUGIN_DIR = DataStorage:getDataDir() .. "/plugins/koreaderremote.koplugin"
-local INDEX_FILE = PLUGIN_DIR .. "/web/index.html"
+local WEB_DIR = PLUGIN_DIR .. "/web"
+local INDEX_FILE = WEB_DIR .. "/index.html"
 local BUILD = {
     channel = "stable",
     source = "main",
@@ -23,6 +24,13 @@ local BUILD = {
     build_id = "legacy",
     commit = "unknown",
 }
+local i18n_loader = loadfile(PLUGIN_DIR .. "/i18n.lua")
+if i18n_loader then
+    local i18n_ok, i18n = pcall(i18n_loader)
+    if i18n_ok and type(i18n) == "table" and i18n.install then
+        i18n.install()
+    end
+end
 local build_loader = loadfile(PLUGIN_DIR .. "/build.lua")
 if build_loader then
     local build_ok, build_result = pcall(build_loader)
@@ -335,6 +343,7 @@ local module_context = {
     version = VERSION,
     build = BUILD,
     index_file = INDEX_FILE,
+    web_dir = WEB_DIR,
     http_status = HTTP_STATUS,
     default_port = DEFAULT_PORT,
     update_channel_settings_key = UPDATE_CHANNEL_SETTINGS_KEY,

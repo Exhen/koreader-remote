@@ -1,0 +1,241 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: koreader-remote\n"
+"Language: zh_CN\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+msgid "KOReader Remote"
+msgstr "KOReader 遥控"
+
+msgid "Control KOReader page turns, device settings, footnotes, and selected-text notes from a phone with QR pairing and reliable Wi-Fi recovery."
+msgstr "通过手机控制 KOReader 翻页、设备设置、脚注与选中文本笔记；支持二维码配对，并在 Wi-Fi 恢复后可靠重连。"
+
+msgid "The remote note could not be prepared.\n\nKOReader Remote stayed active. Please try again after reopening the book."
+msgstr "无法准备远程笔记。\n\nKOReader 遥控仍在运行。请重新打开书籍后再试。"
+
+msgid "The selected text could not be saved as a highlight."
+msgstr "无法将所选文本保存为高亮。"
+
+msgid "Edit note on phone"
+msgstr "在手机上编辑笔记"
+
+msgid "Write note on phone"
+msgstr "在手机上写笔记"
+
+msgid "Remote note"
+msgstr "远程笔记"
+
+msgid "Type here or continue in KOReader Remote on your phone."
+msgstr "在此输入，或在手机上的 KOReader 遥控中继续编辑。"
+
+msgid "Cancel"
+msgstr "取消"
+
+msgid "Paste"
+msgstr "粘贴"
+
+msgid "Save"
+msgstr "保存"
+
+msgid "The note could not be saved."
+msgstr "无法保存笔记。"
+
+msgid "The selected note is no longer available."
+msgstr "所选笔记已不可用。"
+
+msgid "Note saved from phone."
+msgstr "已从手机保存笔记。"
+
+msgid "Note saved."
+msgstr "笔记已保存。"
+
+msgid "Set remote-control port"
+msgstr "设置遥控端口"
+
+msgid "Enter a port between 1 and 65535."
+msgstr "请输入 1 到 65535 之间的端口。"
+
+msgid "Waiting for Wi-Fi…"
+msgstr "正在等待 Wi-Fi…"
+
+msgid "Retrying connection (%d)…"
+msgstr "正在重试连接（%d）…"
+
+msgid "Starting remote server…"
+msgstr "正在启动遥控服务…"
+
+msgid "Error: %s"
+msgstr "错误：%s"
+
+msgid "Unknown"
+msgstr "未知"
+
+msgid "Untitled"
+msgstr "无标题"
+
+msgid "Server stopped"
+msgstr "服务已停止"
+
+msgid "Dev"
+msgstr "开发版"
+
+msgid "Stable (main)"
+msgstr "稳定版（main）"
+
+msgid "Update channel"
+msgstr "更新通道"
+
+msgid "Stable (main, selected)"
+msgstr "稳定版（main，已选）"
+
+msgid "Dev (selected)"
+msgstr "开发版（已选）"
+
+msgid "Stop remote server"
+msgstr "停止遥控服务"
+
+msgid "Start remote server"
+msgstr "启动遥控服务"
+
+msgid "Show QR code"
+msgstr "显示二维码"
+
+msgid "Test connection"
+msgstr "测试连接"
+
+msgid "Check for updates"
+msgstr "检查更新"
+
+msgid "Update channel: %s"
+msgstr "更新通道：%s"
+
+msgid "Installed: %s"
+msgstr "已安装：%s"
+
+msgid "Auto start remote server"
+msgstr "自动启动遥控服务"
+
+msgid "Port: %d"
+msgstr "端口：%d"
+
+msgid "Running"
+msgstr "运行中"
+
+msgid "Waiting for Wi-Fi"
+msgstr "等待 Wi-Fi"
+
+msgid "Starting"
+msgstr "正在启动"
+
+msgid "Retrying"
+msgstr "正在重试"
+
+msgid "Error"
+msgstr "错误"
+
+msgid "Stopped"
+msgstr "已停止"
+
+msgid "No network address could be detected.\n\nConnect the reader to Wi-Fi and try again."
+msgstr "未能检测到网络地址。\n\n请将阅读器连接到 Wi-Fi 后重试。"
+
+msgid "The remote server is not running."
+msgstr "遥控服务未在运行。"
+
+msgid "KOReader Remote is waiting for Wi-Fi on port %d.\n\nIt will recover automatically when the network is ready."
+msgstr "KOReader 遥控正在端口 %d 上等待 Wi-Fi。\n\n网络就绪后将自动恢复。"
+
+msgid "KOReader Remote is running.\n\nIP address: %s\n\nRemote URL:\n%s"
+msgstr "KOReader 遥控正在运行。\n\nIP 地址：%s\n\n遥控地址：\n%s"
+
+msgid "Close"
+msgstr "关闭"
+
+msgid "Connected"
+msgstr "已连接"
+
+msgid "Not connected"
+msgstr "未连接"
+
+msgid "Not available"
+msgstr "不可用"
+
+msgid "None"
+msgstr "无"
+
+msgid "Manual"
+msgstr "手动"
+
+msgid "Autostart"
+msgstr "自动启动"
+
+msgid "Open"
+msgstr "已打开"
+
+msgid "Not open"
+msgstr "未打开"
+
+msgid "KOReader Remote v%s\n\nServer: %s\nState: %s\nNetwork: %s\nIP: %s\nPort: %d\nBuild: %s\nAutostart: %s\nSession: %s\nDocument: %s\nURL: %s\nLast error: %s"
+msgstr "KOReader 遥控 v%s\n\n服务：%s\n状态：%s\n网络：%s\nIP：%s\n端口：%d\n构建：%s\n自动启动：%s\n会话：%s\n文档：%s\n地址：%s\n最近错误：%s"
+
+msgid "Enabled"
+msgstr "已启用"
+
+msgid "Disabled"
+msgstr "已禁用"
+
+msgid "KOReader Remote could not start on port %d.\n\n%s"
+msgstr "KOReader 遥控无法在端口 %d 上启动。\n\n%s"
+
+msgid "Wi-Fi is not ready yet.\n\nKOReader Remote will retry automatically."
+msgstr "Wi-Fi 尚未就绪。\n\nKOReader 遥控将自动重试。"
+
+msgid "%s v%s (%s, %s, commit %s)"
+msgstr "%s v%s（%s，%s，提交 %s）"
+
+msgid "Stable"
+msgstr "稳定版"
+
+msgid "dev"
+msgstr "开发"
+
+msgid "main"
+msgstr "主线"
+
+msgid "An update operation is already running."
+msgstr "已有更新操作正在进行。"
+
+msgid "Checking for updates…"
+msgstr "正在检查更新…"
+
+msgid "Could not check for updates.\n\n"
+msgstr "无法检查更新。\n\n"
+
+msgid "KOReader Remote is up to date.\n\nInstalled build: %s\n%s: v%s\nUpdate channel: %s"
+msgstr "KOReader 遥控已是最新。\n\n已安装构建：%s\n%s：v%s\n更新通道：%s"
+
+msgid "Latest Dev build"
+msgstr "最新开发版构建"
+
+msgid "Latest Stable release"
+msgstr "最新稳定版发布"
+
+msgid "The installed version is newer than the latest public release.\n\nInstalled build: %s\n%s: v%s\nUpdate channel: %s"
+msgstr "已安装版本新于最新公开发布。\n\n已安装构建：%s\n%s：v%s\n更新通道：%s"
+
+msgid "A KOReader Remote update is available.\n\nInstalled build: %s\nAvailable version: v%s\nUpdate channel: %s\nBuild: %s (commit %s)\nDownload size: %s\n\nThe current plugin will be backed up before installation.\n\nDownload and install the update?"
+msgstr "有可用的 KOReader 遥控更新。\n\n已安装构建：%s\n可用版本：v%s\n更新通道：%s\n构建：%s（提交 %s）\n下载大小：%s\n\n安装前会备份当前插件。\n\n是否下载并安装更新？"
+
+msgid "Update"
+msgstr "更新"
+
+msgid "Downloading and checking KOReader Remote v%s…"
+msgstr "正在下载并校验 KOReader 遥控 v%s…"
+
+msgid "The update could not be installed.\n\n"
+msgstr "无法安装更新。\n\n"
+
+msgid "KOReader Remote v%s (%s, commit %s) was installed.\n\nKOReader must restart before the new version can be used."
+msgstr "已安装 KOReader 遥控 v%s（%s，提交 %s）。\n\n需重启 KOReader 后才能使用新版本。"

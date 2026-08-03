@@ -53,12 +53,18 @@ local REQUIRED_FILES = {
     "build.lua",
     "devicecontrols.lua",
     "http.lua",
+    "i18n.lua",
     "interaction.lua",
+    "locale/zh_CN.po",
+    "locale/web_zh_CN.json",
     "menu.lua",
     "main.lua",
     "network.lua",
     "updater.lua",
     "web/index.html",
+    "web/styles.css",
+    "web/app.js",
+    "web/i18n.js",
 }
 
 local function trim(value)

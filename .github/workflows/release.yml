@@ -79,7 +79,10 @@ jobs:
           MAIN="${PLUGIN}/main.lua"
           CONTROLS="${PLUGIN}/devicecontrols.lua"
           HTTP="${PLUGIN}/http.lua"
+          I18N="${PLUGIN}/i18n.lua"
           INTERACTION="${PLUGIN}/interaction.lua"
+          LOCALE_ZH_CN="${PLUGIN}/locale/zh_CN.po"
+          LOCALE_WEB_ZH_CN="${PLUGIN}/locale/web_zh_CN.json"
           MENU="${PLUGIN}/menu.lua"
           NETWORK="${PLUGIN}/network.lua"
           UPDATER="${PLUGIN}/updater.lua"
@@ -99,12 +102,18 @@ jobs:
           test -f "${MAIN}"
           test -f "${CONTROLS}"
           test -f "${HTTP}"
+          test -f "${I18N}"
           test -f "${INTERACTION}"
+          test -f "${LOCALE_ZH_CN}"
+          test -f "${LOCALE_WEB_ZH_CN}"
           test -f "${MENU}"
           test -f "${NETWORK}"
           test -f "${UPDATER}"
           test -f "${BUILD}"
           test -f "${INDEX}"
+          test -f "${PLUGIN}/web/styles.css"
+          test -f "${PLUGIN}/web/app.js"
+          test -f "${PLUGIN}/web/i18n.js"
           test ! -e dev-updates
 
           python3 - "${VERSION}" "${GITHUB_REF_NAME}" <<'PY'
@@ -137,16 +146,42 @@ jobs:
           "${LUAC}" -p "${MAIN}"
           "${LUAC}" -p "${CONTROLS}"
           "${LUAC}" -p "${HTTP}"
+          "${LUAC}" -p "${I18N}"
           "${LUAC}" -p "${INTERACTION}"
           "${LUAC}" -p "${MENU}"
           "${LUAC}" -p "${NETWORK}"
           "${LUAC}" -p "${UPDATER}"
           "${LUAC}" -p "${BUILD}"
 
+          grep -Fq 'i18n.lua' "${UPDATER}"
+          grep -Fq 'locale/zh_CN.po' "${UPDATER}"
+          grep -Fq 'locale/web_zh_CN.json' "${UPDATER}"
+          grep -Fq 'web/i18n.js' "${UPDATER}"
+          grep -Fq 'msgid "KOReader Remote"' "${LOCALE_ZH_CN}"
+          grep -Fq 'msgstr "KOReader 遥控"' "${LOCALE_ZH_CN}"
+          grep -Fq 'KOReaderRemote i18n' "${I18N}"
+          grep -Fq '"This device"' "${LOCALE_WEB_ZH_CN}"
+          grep -Fq 'export function t' "${PLUGIN}/web/i18n.js"
+          grep -Fq 'import { t, applyDocumentI18n, initI18n }' "${PLUGIN}/web/app.js"
+          grep -Fq 'i18n-zh_CN.json' "${HTTP}"
+          grep -Fq '<html lang="en">' "${INDEX}"
+          grep -Fq 'data-i18n="This device"' "${INDEX}"
+          if grep -Fq 'btn-scan-lan' "${INDEX}"; then
+            echo "LAN scan UI must be removed from index.html"
+            exit 1
+          fi
+          if grep -Fq 'scanLanInBrowser' "${PLUGIN}/web/app.js"; then
+            echo "LAN scan logic must be removed from app.js"
+            exit 1
+          fi
+
           grep -Fq "local VERSION = \"${VERSION}\"" "${MAIN}"
           grep -Fq 'repository = "helitra/koreader-remote"' "${MAIN}"
           grep -Fq 'sorting_hint = "tools"' "${MENU}"
           grep -Fq '/api/ping' "${HTTP}"
+          grep -Fq 'device_name' "${HTTP}"
+          grep -Fq 'setConnectedStatus' "${INDEX}"
+          grep -Fq 'rememberDeviceName' "${INDEX}"
           grep -Fq '/api/next' "${HTTP}"
           grep -Fq '/api/previous' "${HTTP}"
           grep -Fq '/api/v1/capabilities' "${HTTP}"
@@ -165,10 +200,25 @@ jobs:
           grep -Fq '/api/v1/bookmarks/edit-note' "${HTTP}"
           grep -Fq '/api/v1/bookmarks/delete-note' "${HTTP}"
           grep -Fq '/api/v1/bookmarks/delete' "${HTTP}"
+          grep -Fq '/api/v1/toc' "${HTTP}"
+          grep -Fq '/api/v1/toc/open' "${HTTP}"
+          grep -Fq '/api/v1/toc/return' "${HTTP}"
+          grep -Fq 'getToc' "${INTERACTION}"
+          grep -Fq 'openTocEntry' "${INTERACTION}"
+          grep -Fq '/api/v1/input' "${HTTP}"
+          grep -Fq '/api/v1/input/push' "${HTTP}"
+          grep -Fq 'pushInputText' "${INTERACTION}"
+          grep -Fq 'findActiveInputTarget' "${INTERACTION}"
           grep -Fq '/api/v1/footnote/open' "${HTTP}"
+          grep -Fq '/api/v1/footnote/close' "${HTTP}"
+          grep -Fq '/api/v1/footnotes' "${HTTP}"
+          grep -Fq 'listFootnotes' "${INTERACTION}"
+          grep -Fq 'closeFootnotePopup' "${INTERACTION}"
           grep -Fq '<html lang="en">' "${INDEX}"
-          grep -Fq '<details id="device-controls" hidden>' "${INDEX}"
-          grep -Fq '<summary>Device settings</summary>' "${INDEX}"
+          grep -Fq 'id="device-controls"' "${INDEX}"
+          grep -Fq 'id="settings-button"' "${INDEX}"
+          grep -Fq 'id="settings-backdrop"' "${INDEX}"
+          grep -Fq 'data-i18n="Device settings"' "${INDEX}"
           grep -Fq '<div id="full-refresh-row" hidden>' "${INDEX}"
           grep -Fq 'id="idle-stop-select"' "${INDEX}"
           grep -Fq '/api/v1/idle-stop?minutes=' "${INDEX}"
@@ -276,7 +326,8 @@ jobs:
           grep -Fq 'className = "bookmark-menu-panel"' "${INDEX}"
           grep -Fq 'className = "bookmark-menu-dot"' "${INDEX}"
           grep -Fq 'index < 3' "${INDEX}"
-          grep -Fq '#device-controls > summary {' "${INDEX}"
+          grep -Fq '.drawer-header {' "${INDEX}"
+          grep -Fq 'body.settings-open #device-controls' "${INDEX}"
           grep -Fq '.bookmark-menu > summary::before' "${INDEX}"
           grep -Fq 'content: none !important' "${INDEX}"
           if grep -Fq 'content: "⚙"' "${INDEX}"; then
@@ -311,6 +362,26 @@ jobs:
           fi
           grep -Fq 'id="note-button"' "${INDEX}"
           grep -Fq 'id="footnote-button"' "${INDEX}"
+          grep -Fq 'id="toc-button"' "${INDEX}"
+          grep -Fq 'id="toc-view"' "${INDEX}"
+          grep -Fq '/api/v1/toc' "${INDEX}"
+          grep -Fq 'id="input-button"' "${INDEX}"
+          grep -Fq 'id="input-view"' "${INDEX}"
+          grep -Fq '/api/v1/input/push' "${INDEX}"
+          grep -Fq 'id="footnote-view"' "${INDEX}"
+          grep -Fq 'id="footnote-close-popup"' "${INDEX}"
+          grep -Fq '/api/v1/footnotes' "${INDEX}"
+          grep -Fq '/api/v1/footnote/close' "${INDEX}"
+          grep -Fq 'const WEB_I18N =' "${INDEX}"
+          grep -Fq 'function applyDocumentI18n' "${INDEX}"
+          grep -Fq 'data-i18n="Device settings"' "${INDEX}"
+          grep -Fq '"Device settings": "设备设置"' "${INDEX}"
+          grep -Fq '#device-controls {' "${INDEX}"
+          grep -Fq '.drawer-header {' "${INDEX}"
+          grep -Fq 'id="function-pad"' "${INDEX}"
+          grep -Fq 'id="page-pad"' "${INDEX}"
+          grep -Fq 'id="book-title"' "${INDEX}"
+          grep -Fq 'id="device-name"' "${INDEX}"
           grep -Fq 'id="oled-button"' "${INDEX}"
           grep -Fq 'id="note-view"' "${INDEX}"
           grep -Fq 'Pull from KOReader' "${INDEX}"
@@ -338,11 +409,17 @@ jobs:
               Path("koreaderremote.koplugin/build.lua"),
               Path("koreaderremote.koplugin/devicecontrols.lua"),
               Path("koreaderremote.koplugin/http.lua"),
+              Path("koreaderremote.koplugin/i18n.lua"),
               Path("koreaderremote.koplugin/interaction.lua"),
+              Path("koreaderremote.koplugin/locale/zh_CN.po"),
+              Path("koreaderremote.koplugin/locale/web_zh_CN.json"),
               Path("koreaderremote.koplugin/menu.lua"),
               Path("koreaderremote.koplugin/network.lua"),
               Path("koreaderremote.koplugin/updater.lua"),
               Path("koreaderremote.koplugin/web/index.html"),
+              Path("koreaderremote.koplugin/web/styles.css"),
+              Path("koreaderremote.koplugin/web/app.js"),
+              Path("koreaderremote.koplugin/web/i18n.js"),
               Path("README.md"),
               Path("CHANGELOG.md"),
           ]
@@ -385,6 +462,13 @@ jobs:
           if settings_position > remote_position:
               raise SystemExit("Device settings must appear above page controls.")
 
+          if 'id="settings-button"' not in index:
+              raise SystemExit("Settings drawer button is missing.")
+          if 'id="function-pad"' not in index or 'id="page-pad"' not in index:
+              raise SystemExit("Remote control pads are missing.")
+          if 'id="book-title"' not in index or 'id="device-name"' not in index:
+              raise SystemExit("Header device/book labels are missing.")
+
           required_presets = {
               "brightness": ["1", "10", "25", "50", "75", "100"],
               "warmth": ["0", "25", "50", "75", "100"],
@@ -403,9 +487,9 @@ jobs:
           if 'type="range"' in index:
               raise SystemExit("Sliders are not allowed.")
 
-          if '<details id="device-controls" open' in index:
+          if "<details id=\"device-controls\"" in index:
               raise SystemExit(
-                  "Device settings must start collapsed."
+                  "Device settings must use the side drawer, not details."
               )
 
           if "const HOLD_DELAY_MS = 500;" not in index:
@@ -446,7 +530,8 @@ jobs:
               'className = "bookmark-menu-panel"',
               'className = "bookmark-menu-dot"',
               'index < 3',
-              '#device-controls > summary {',
+              '.drawer-header {',
+              'body.settings-open #device-controls',
               '.bookmark-menu > summary::before',
               'content: none !important',
               'aria-expanded',
@@ -460,6 +545,25 @@ jobs:
               'Open on Kindle',
               'id="note-button"',
               'id="footnote-button"',
+              'id="toc-button"',
+              'id="toc-view"',
+              '/api/v1/toc',
+              'id="input-button"',
+              'id="input-view"',
+              '/api/v1/input/push',
+              'id="footnote-view"',
+              'id="footnote-close-popup"',
+              '/api/v1/footnotes',
+              '/api/v1/footnote/close',
+              'const WEB_I18N =',
+              'applyDocumentI18n',
+              'data-i18n="Device settings"',
+              '"Device settings": "设备设置"',
+              'id="function-pad"',
+              'id="page-pad"',
+              'id="settings-button"',
+              'id="book-title"',
+              'id="device-name"',
               'id="oled-button"',
               'id="note-view"',
               'Pull from KOReader',
